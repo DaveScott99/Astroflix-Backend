@@ -1,0 +1,98 @@
+version: '3.8'
+
+networks:
+  backend:
+    name: astroflix_microservices
+    driver: bridge
+    external: true
+
+services:
+
+  discovery-service:
+    image: astroflix/discovery-service:v1
+    container_name: "astroflix-discovery-service"
+    ports:
+      - 8761:8761
+    networks:
+      - backend
+
+  gateway-service:
+    image: astroflix/gateway-service:v1
+    container_name: "astroflix-gateway-service"
+    environment:
+      JWT_ISSUER_URI: ${JWT_ISSUER}/realms/${KC_REALM}
+      JWK_SET_URI: ${JWK_URI}/realms/${KC_REALM}/protocol/openid-connect/certs
+    ports:
+      - 8760:8760
+    depends_on:
+      - discovery-service
+      - keycloak
+    networks:
+      - backend
+
+  account-service:
+    image: astroflix/account-service:v1
+    container_name: "astroflix-account-service"
+    environment:
+      KEYCLOAK_CLIENT_ID: ${KC_CLIENT_ID}
+      KEYCLOAK_CLIENT_SECRET: ${KC_CLIENT_SECRET}
+      KEYCLOAK_DOMAIN: ${KC_DOMAIN}
+      REALM: ${KC_REALM}
+      KEYCLOAK_ADMIN_USERNAME: ${KC_ADMIN_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+    ports:
+      - 8762:8762
+    depends_on:
+      - discovery-service
+    networks:
+      - backend
+
+  media-service:
+    image: astroflix/media-service:v1
+    container_name: "astroflix-media-service"
+    ports:
+      - 8763:8763
+    depends_on:
+      - discovery-service
+    networks:
+      - backend
+
+  keycloak:
+    container_name: keycloak_service
+    image: quay.io/keycloak/keycloak:23.0.6
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: mariadb
+      KC_DB_USERNAME: ${KC_DB_USER}
+      KC_DB_PASSWORD: ${KC_DB_PWD}
+      KC_DB_URL: jdbc:mariadb://kc-db/${KC_DB_SCHEMA}?characterEncoding=UTF-8
+      KC_HEALTH_ENABLED: "true"
+      KC_LOG_LEVEL: info
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://keycloak:8759/health/ready" ]
+      interval: 15s
+      timeout: 2s
+      retries: 15
+    ports:
+      - 8759:8080
+    networks:
+      - backend
+    command: start-dev
+    depends_on:
+      - kc-db
+
+  kc-db:
+    container_name: keycloak_db
+    image: docker.io/mariadb:10
+    environment:
+      MARIADB_DATABASE: ${KC_DB_SCHEMA}
+      MARIADB_ROOT_PASSWORD: ${KC_DB_ROOT_PWD}
+      MARIADB_USER: ${KC_DB_USER}
+      MARIADB_PASSWORD: ${KC_DB_PWD}
+    ports:
+      - 3310:3306
+    volumes:
+      - /home/davi/astroflix-databases/keycloak_db:/var/lib/mysql
+    networks:
+      - backend
