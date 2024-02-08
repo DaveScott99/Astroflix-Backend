@@ -6,6 +6,7 @@ pipeline {
             steps {
                 script {
                     dockerapp = docker.build("davescott99/astroflix-discovery-service:${env.BUILD_ID}", "-f ./discovery/Dockerfile ./discovery")
+                    dockerapp = docker.build("davescott99/astroflix-gateway-service:${env.BUILD_ID}", "-f ./gateway/Dockerfile ./gateway")
                 }
             }
         }
